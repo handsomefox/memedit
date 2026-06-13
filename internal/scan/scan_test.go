@@ -122,28 +122,3 @@ func TestScanMultipleRegionsSkipsUnmapped(t *testing.T) {
 		t.Fatalf("Scan multi-region = %v, want %v", got, want)
 	}
 }
-
-func TestFilterNarrows(t *testing.T) {
-	// Two candidates; the value at one of them changes so it is dropped.
-	data := make([]byte, 64)
-	v10 := mustParse(KindInt32, "10")
-	v20 := mustParse(KindInt32, "20")
-	copy(data[0:], v10.Bytes())
-	copy(data[8:], v10.Bytes())
-	f := &fakeReader{segs: []fakeSeg{{base: 0x500, data: data}}}
-
-	cands := []uintptr{0x500, 0x508}
-	// keep only those currently equal to 10.
-	keep := func(_ uintptr, buf []byte) bool { return Decode(KindInt32, buf).Equal(v10) }
-	got := Filter(f, cands, 4, keep)
-	if !slices.Equal(got, []uintptr{0x500, 0x508}) {
-		t.Fatalf("Filter(==10) = %v, want both", got)
-	}
-
-	// Change addr 0x508 to 20, re-filter for ==10.
-	copy(data[8:], v20.Bytes())
-	got = Filter(f, []uintptr{0x500, 0x508}, 4, keep)
-	if !slices.Equal(got, []uintptr{0x500}) {
-		t.Fatalf("Filter after change = %v, want [0x500]", got)
-	}
-}

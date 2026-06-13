@@ -153,28 +153,3 @@ func Scan(r Reader, regions []Region, needle Value, opts Options) []uintptr {
 	slices.Sort(merged)
 	return merged
 }
-
-// Filter re-reads the current value at each candidate address and keeps only
-// those for which keep returns true. buf passed to keep holds width bytes (or
-// fewer on a short read, in which case keep is not called). The returned slice
-// preserves the input order; cands may be reused by the caller afterwards.
-//
-// next-style scans touch only the existing candidate list, so this stays fast
-// without parallelism as the set narrows.
-func Filter(r Reader, cands []uintptr, width int, keep func(addr uintptr, buf []byte) bool) []uintptr {
-	out := cands[:0]
-	var buf [8]byte
-	for _, addr := range cands {
-		n, err := r.ReadInto(addr, buf[:width])
-		if err != nil && n < width {
-			continue
-		}
-		if n < width {
-			continue
-		}
-		if keep(addr, buf[:width]) {
-			out = append(out, addr)
-		}
-	}
-	return out
-}
