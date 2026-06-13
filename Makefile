@@ -1,4 +1,4 @@
-# memedit — fast Windows memory scanner/editor.
+# memedit: Windows memory scanner/editor.
 # The binary targets windows/amd64; tests and benchmarks run on any platform.
 
 BINARY  := memedit.exe

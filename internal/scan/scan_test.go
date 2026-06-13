@@ -104,7 +104,7 @@ func TestScanStraddlingChunkBoundary(t *testing.T) {
 	}
 }
 
-func TestScanMultipleRegionsSkipsUnmapped(t *testing.T) {
+func TestScanMultipleRegions(t *testing.T) {
 	filler := mustParse(KindInt32, "1")
 	needle := mustParse(KindInt32, "9")
 	d1 := buildBuf(1024, 4, filler, needle)
@@ -120,5 +120,41 @@ func TestScanMultipleRegionsSkipsUnmapped(t *testing.T) {
 	want := []uintptr{0x1000 + 16, 0x9000 + 32}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Scan multi-region = %v, want %v", got, want)
+	}
+}
+
+// failReader wraps a fakeReader and returns an error for reads at a chosen
+// address, simulating an unreadable page mid-region.
+type failReader struct {
+	inner   *fakeReader
+	failAt  uintptr
+	failErr error
+}
+
+func (f *failReader) ReadInto(addr uintptr, buf []byte) (int, error) {
+	if addr == f.failAt {
+		return 0, f.failErr
+	}
+	return f.inner.ReadInto(addr, buf)
+}
+
+// TestScanSkipsUnreadableChunk drives the driver's skip-on-error branch: one
+// chunk in the middle of a region fails to read, and the scan must still
+// complete and return matches from the other chunks.
+func TestScanSkipsUnreadableChunk(t *testing.T) {
+	filler := mustParse(KindInt32, "1")
+	needle := mustParse(KindInt32, "321")
+	const base = 0x40000
+	data := buildBuf(1024, 4, filler, needle)
+	copy(data[16:], needle.Bytes())  // chunk 0 (base+0)
+	copy(data[300:], needle.Bytes()) // chunk 1 (base+256), which will fail
+	copy(data[600:], needle.Bytes()) // chunk 2 (base+512)
+	inner := &fakeReader{segs: []fakeSeg{{base: base, data: data}}}
+	f := &failReader{inner: inner, failAt: base + 256, failErr: errUnmapped}
+
+	got := Scan(f, regionsOf(inner), needle, Options{Workers: 3, ChunkSize: 256})
+	want := []uintptr{base + 16, base + 600} // base+300 lost with the failed chunk
+	if !slices.Equal(got, want) {
+		t.Fatalf("Scan with failed chunk = %v, want %v", got, want)
 	}
 }

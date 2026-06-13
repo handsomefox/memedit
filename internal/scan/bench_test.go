@@ -6,10 +6,9 @@ import (
 	"unsafe"
 )
 
-// benchU32Unsafe is the unsafe.Slice word-compare variant: reinterpret the
-// buffer as []uint32 and compare whole words. This is the "obvious"
-// optimization the plan calls for; the benchmarks show bytes.Index beats it,
-// which is why production (appendMatches) uses bytes.Index instead.
+// benchU32Unsafe is the unsafe.Slice word-compare variant: it reinterprets the
+// buffer as []uint32 and compares whole words. Benchmarked here against
+// appendMatches (bytes.Index), which is faster.
 func benchU32Unsafe(buf []byte, needle uint32, dst []uintptr) []uintptr {
 	const width = 4
 	if len(buf) < width {
@@ -24,9 +23,8 @@ func benchU32Unsafe(buf []byte, needle uint32, dst []uintptr) []uintptr {
 	return dst
 }
 
-// Benchmark variants for the 4-byte hot path. These justify the chosen
-// unsafe word-compare implementation against a naive strided loader and a
-// bytes.Index needle search. Run with:
+// These benchmarks compare three 4-byte matcher implementations: an unsafe
+// word compare, a naive strided loader, and a bytes.Index needle search. Run:
 //
 //	go test -bench=Match -benchmem ./internal/scan
 //

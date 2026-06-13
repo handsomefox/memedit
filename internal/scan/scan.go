@@ -130,7 +130,12 @@ func Scan(r Reader, regions []Region, needle Value, opts Options) []uintptr {
 				c := work[i]
 				n, err := r.ReadInto(c.addr, buf[:c.readLen])
 				if err != nil && n < width {
-					continue // skip unreadable chunk
+					// Skip the whole chunk. ReadProcessMemory fails the entire
+					// requested range if any page in it is unreadable; that's
+					// safe here because the region filter only admits
+					// homogeneously committed, readable regions, so mid-region
+					// holes are unlikely.
+					continue
 				}
 				local = appendMatches(local, c.addr, buf[:n], needle, opts.Align)
 				if opts.Progress != nil {

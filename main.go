@@ -1,9 +1,9 @@
 //go:build windows
 
-// Command memedit is a fast memory scanner/editor for single-player Windows
-// games. It attaches to a running process, scans its memory for a value you can
-// see in-game, narrows the candidates as that value changes, then writes a new
-// value — the same workflow as Cheat Engine, optimized for raw scan speed.
+// Command memedit is a memory scanner/editor for single-player Windows games.
+// It attaches to a running process, scans its memory for a value you can see
+// in-game, narrows the candidates as that value changes, then writes a new
+// value.
 package main
 
 import (
@@ -37,7 +37,7 @@ func main() {
 
 func run(name string, pid int, typ string, align, workers, chunk int, includeMapped, noElevate bool) error {
 	fmt.Println("WARNING: single-player / offline use only. Do NOT use against multiplayer games " +
-		"with anti-cheat (VAC / EAC / BattlEye) — that is exactly the access they ban for.")
+		"with anti-cheat (VAC / EAC / BattlEye); that is exactly the access they ban for.")
 
 	if !noElevate {
 		ensureElevated() // re-launches elevated and exits if needed
