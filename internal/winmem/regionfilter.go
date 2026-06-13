@@ -1,11 +1,9 @@
-// Package winmem opens a target process and provides region enumeration plus
-// read/write access to its memory. The system-call layer is Windows-only
-// (guarded by //go:build windows); the region-selection predicate below is
-// OS-independent so it can be unit-tested anywhere.
+// Package winmem opens a target process and provides region enumeration and
+// read/write access to its memory. The system-call layer is Windows-only; the
+// region-selection predicate below is OS-independent and unit-tested anywhere.
 package winmem
 
-// Windows memory constants, redefined here (rather than imported from
-// golang.org/x/sys/windows) so this file builds and tests on any platform.
+// Windows memory constants, redefined here so this file builds on any platform.
 const (
 	memCommit = 0x00001000
 	memMapped = 0x00040000
@@ -21,9 +19,8 @@ const (
 	protectBaseMask = 0x000000ff
 )
 
-// scannable reports whether a memory region with the given State, Protect and
-// Type flags should be included in a scan. It selects committed, writable,
-// non-guard pages; mapped (file/shared) regions are excluded unless
+// scannable reports whether a region with the given flags should be scanned:
+// committed, writable, non-guard pages, excluding mapped regions unless
 // includeMapped is set.
 func scannable(state, protect, typ uint32, includeMapped bool) bool {
 	if state != memCommit {

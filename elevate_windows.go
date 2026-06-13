@@ -10,12 +10,10 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-// ensureElevated re-launches the program with Administrator rights if the
-// current process is not elevated. OpenProcess on a game typically requires
-// elevation; rather than fail later with access-denied, we trigger a UAC
-// prompt now. On success the elevated copy starts in a new console and the
-// current (unelevated) process exits. If elevation is declined or fails, we
-// print a hint and continue so the user still gets the access-denied path.
+// ensureElevated re-launches the program elevated (via a UAC prompt) if it is
+// not already, since OpenProcess on a game usually requires Administrator. On
+// success the elevated copy starts in a new console and this process exits; if
+// elevation is declined or fails, it prints a hint and continues.
 func ensureElevated() {
 	if windows.GetCurrentProcessToken().IsElevated() {
 		return

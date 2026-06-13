@@ -8,9 +8,8 @@ import (
 )
 
 // newProgress returns a scan progress callback that prints a row of dots as
-// bytes are scanned, so a long first scan does not look frozen. The callback is
-// safe for concurrent use by worker goroutines. total is the number of bytes to
-// be scanned; if it is zero the callback is a no-op.
+// bytes are scanned, so a long scan does not look frozen. It is safe for
+// concurrent use; if total is zero the callback is a no-op.
 func newProgress(out io.Writer, total uint64) func(scanned int) {
 	if total == 0 {
 		return func(int) {}
@@ -25,8 +24,7 @@ func newProgress(out io.Writer, total uint64) func(scanned int) {
 	return func(scanned int) {
 		cur := done.Add(uint64(scanned))
 		prev := cur - uint64(scanned)
-		// Emit one dot per step boundary this call crossed; summed across all
-		// calls this prints ~dots dots regardless of chunk scheduling.
+		// One dot per step boundary this call crossed.
 		for s := prev/step + 1; s <= cur/step; s++ {
 			mu.Lock()
 			fmt.Fprint(out, ".") //nolint:errcheck // progress output; write errors are not actionable

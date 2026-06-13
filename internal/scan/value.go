@@ -1,7 +1,6 @@
-// Package scan contains the OS-independent value-matching logic and the
-// parallel scan driver used to search a target process's memory. None of the
-// code here performs any system calls: memory access is abstracted behind the
-// Reader interface, which keeps the hot path testable on any platform.
+// Package scan contains the OS-independent value-matching logic and parallel
+// scan driver. Memory access is abstracted behind the Reader interface, so the
+// code performs no system calls and is testable on any platform.
 package scan
 
 import (
@@ -71,15 +70,14 @@ func (k Kind) Size() int {
 }
 
 // Value is a parsed scan value: a kind plus its raw little-endian bit pattern
-// stored in the low Size() bytes of Bits. Storing the bit pattern lets the hot
-// path compare integers and floats uniformly as fixed-width words.
+// in the low Size() bytes of Bits.
 type Value struct {
 	Kind Kind
 	Bits uint64
 }
 
 // Parse interprets s as a value of kind k. Integer inputs accept 0x/0o/0b
-// prefixes; negative integers are encoded as their two's-complement bits.
+// prefixes.
 func Parse(k Kind, s string) (Value, error) {
 	switch k {
 	case KindInt32:
@@ -162,10 +160,8 @@ func (v Value) Equal(other Value) bool {
 	return v.Bits == other.Bits
 }
 
-// Cmp orders v against other using their kind's natural ordering and returns
-// -1, 0, or +1. Both values must share the same kind. Float comparisons follow
-// IEEE-754, so NaN compares as not-less, not-greater, and not-equal; Cmp
-// reports +1 in that case to keep a total order for callers.
+// Cmp orders v against other by their kind's natural ordering, returning -1, 0,
+// or +1. Both must share the same kind. NaN sorts as greatest (see cmpFloat).
 func (v Value) Cmp(other Value) int {
 	switch v.Kind {
 	case KindInt32:

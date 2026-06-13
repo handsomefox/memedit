@@ -1,8 +1,7 @@
-// Package repl implements the interactive command loop that drives a memory
-// scan: an initial full scan, successive narrowing of the candidate set as the
-// in-game value changes, and writing new values. It depends only on the scan
-// package and a small Target interface, so it is OS-independent and testable
-// with an in-memory target.
+// Package repl implements the interactive command loop that drives a scan:
+// initial full scan, narrowing the candidate set as the value changes, and
+// writing new values. It depends only on the scan package and the Target
+// interface, so it is OS-independent and testable with an in-memory target.
 package repl
 
 import (
@@ -52,8 +51,7 @@ func New(target Target, cfg Config, out io.Writer) *REPL {
 }
 
 // Run reads commands from in until EOF or a quit command. Per-command failures
-// are reported to the output and the loop continues, which suits an
-// interactive session.
+// are reported and the loop continues.
 func (r *REPL) Run(in io.Reader) {
 	sc := bufio.NewScanner(in)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -71,8 +69,7 @@ func (r *REPL) Run(in io.Reader) {
 	}
 }
 
-// printf is the single output sink; a failure writing to the terminal is not
-// recoverable or actionable here, so the write error is intentionally ignored.
+// printf is the single output sink.
 func (r *REPL) printf(format string, a ...any) {
 	fmt.Fprintf(r.out, format, a...) //nolint:errcheck // terminal write errors are not actionable
 }
@@ -211,9 +208,9 @@ func (r *REPL) cmdCompare(p pred) {
 	r.printf("%d candidate(s) remain\n", len(r.cands))
 }
 
-// narrow re-reads every candidate and keeps those for which keep returns true,
-// updating the recorded last value for survivors. It compacts cands and last
-// in place. Candidates that can no longer be read are dropped.
+// narrow re-reads every candidate, keeping those for which keep returns true and
+// recording their new value. It compacts cands and last in place; candidates
+// that can no longer be read are dropped.
 func (r *REPL) narrow(keep func(cur, prev scan.Value) bool) {
 	width := r.cfg.Kind.Size()
 	var buf [8]byte

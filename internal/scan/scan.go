@@ -7,37 +7,31 @@ import (
 	"sync/atomic"
 )
 
-// Region is a contiguous span of target memory to scan, identified by its base
-// address and size in bytes.
+// Region is a contiguous span of target memory to scan.
 type Region struct {
 	Base uintptr
 	Size uintptr
 }
 
-// Reader reads memory from the target process. ReadInto fills buf with the
-// bytes at addr and returns the number read; a short read (n < len(buf)) is not
-// an error and the first n bytes are still valid.
+// Reader reads memory from the target process. A short read (n < len(buf)) is
+// not an error; the first n bytes are valid.
 type Reader interface {
 	ReadInto(addr uintptr, buf []byte) (n int, err error)
 }
 
-// DefaultChunkBytes is the per-chunk scan granularity. Splitting regions into
-// fixed-size chunks keeps one giant heap region from bottlenecking a single
-// worker.
+// DefaultChunkBytes is the per-chunk scan granularity.
 const DefaultChunkBytes = 2 << 20 // 2 MiB
 
-// chunk describes one unit of work: read readLen bytes at addr, then scan the
-// owned start offsets within them.
+// chunk is one unit of work: read readLen bytes at addr, then scan them.
 type chunk struct {
 	addr    uintptr
 	readLen int
 }
 
 // planChunks tiles a region into chunks. Each chunk owns the start offsets in
-// [0, stride) and reads stride+width-1 bytes so a value straddling the boundary
-// to the next chunk is still fully present and found exactly once (the trailing
-// width-1 bytes are owned by the following chunk). The final chunk truncates to
-// the region end. Reads never cross into a neighbouring region.
+// [0, stride) and reads stride+width-1 bytes, so a value straddling the
+// boundary is fully present and matched exactly once (the trailing width-1
+// bytes belong to the next chunk). The final chunk truncates to the region end.
 func planChunks(r Region, width, stride int) []chunk {
 	if r.Size < uintptr(width) {
 		return nil
@@ -56,7 +50,7 @@ func planChunks(r Region, width, stride int) []chunk {
 	return chunks
 }
 
-// Options configures a full scan.
+// Options configures a full scan. Zero fields take their defaults.
 type Options struct {
 	Align     int // start-offset alignment; defaults to value size
 	Workers   int // goroutine count; defaults to runtime.NumCPU()
@@ -77,23 +71,19 @@ func (o Options) normalized(width int) Options {
 		o.ChunkSize = DefaultChunkBytes
 	}
 	// Stride must be a multiple of align so aligned values never straddle a
-	// chunk's owned window, and at least one alignment step wide.
-	if o.ChunkSize < o.Align {
-		o.ChunkSize = o.Align
-	}
+	// chunk's owned window.
+	o.ChunkSize = max(o.ChunkSize, o.Align)
 	o.ChunkSize -= o.ChunkSize % o.Align
 	return o
 }
 
 // Scan searches every region for needle and returns the matching target
-// addresses in ascending order. Read failures on individual chunks (guard
-// pages, races with the target freeing memory) are skipped rather than
-// aborting the scan.
+// addresses in ascending order. Chunks that cannot be read are skipped.
 func Scan(r Reader, regions []Region, needle Value, opts Options) []uintptr {
 	width := needle.Kind.Size()
 	opts = opts.normalized(width)
 
-	// Plan all work up front so a single huge region is split across workers.
+	// Plan all work up front so one huge region is split across workers.
 	work := make([]chunk, 0, len(regions))
 	for _, reg := range regions {
 		work = append(work, planChunks(reg, width, opts.ChunkSize)...)
@@ -114,7 +104,7 @@ func Scan(r Reader, regions []Region, needle Value, opts Options) []uintptr {
 		go func(id int) {
 			defer wg.Done()
 			bufp, ok := bufPool.Get().(*[]byte)
-			if !ok { // unreachable: the pool only ever holds *[]byte
+			if !ok { // unreachable: the pool only holds *[]byte
 				b := make([]byte, bufLen)
 				bufp = &b
 			}
@@ -130,12 +120,7 @@ func Scan(r Reader, regions []Region, needle Value, opts Options) []uintptr {
 				c := work[i]
 				n, err := r.ReadInto(c.addr, buf[:c.readLen])
 				if err != nil && n < width {
-					// Skip the whole chunk. ReadProcessMemory fails the entire
-					// requested range if any page in it is unreadable; that's
-					// safe here because the region filter only admits
-					// homogeneously committed, readable regions, so mid-region
-					// holes are unlikely.
-					continue
+					continue // unreadable page; skip the chunk
 				}
 				local = appendMatches(local, c.addr, buf[:n], needle, opts.Align)
 				if opts.Progress != nil {

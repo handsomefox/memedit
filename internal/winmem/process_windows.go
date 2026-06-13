@@ -77,9 +77,8 @@ func (p *Process) Close() error {
 	return nil
 }
 
-// ReadInto reads len(buf) bytes at addr into buf, returning the number of bytes
-// read. A short read or error (e.g. the page became unreadable) is reported but
-// the first n bytes remain valid, which the scan driver tolerates.
+// ReadInto reads len(buf) bytes at addr into buf, returning the number read.
+// On a short read or error the first n bytes remain valid.
 func (p *Process) ReadInto(addr uintptr, buf []byte) (int, error) {
 	if len(buf) == 0 {
 		return 0, nil
@@ -105,9 +104,8 @@ func (p *Process) WriteInto(addr uintptr, buf []byte) (int, error) {
 	return int(wrote), nil
 }
 
-// Regions enumerates the committed, writable regions of the target's address
-// space using VirtualQueryEx, applying the scannable predicate. mapped regions
-// are skipped unless includeMapped is set.
+// Regions walks the address space with VirtualQueryEx and returns the regions
+// passing the scannable predicate.
 func (p *Process) Regions(includeMapped bool) ([]scan.Region, error) {
 	var regions []scan.Region
 	var addr uintptr
@@ -115,9 +113,7 @@ func (p *Process) Regions(includeMapped bool) ([]scan.Region, error) {
 		var mbi windows.MemoryBasicInformation
 		err := windows.VirtualQueryEx(p.handle, addr, &mbi, unsafe.Sizeof(mbi))
 		if err != nil {
-			// VirtualQueryEx fails once addr passes the top of the user-mode
-			// address space: that's the normal end of the walk.
-			break
+			break // past the top of the address space: end of the walk
 		}
 		if mbi.RegionSize == 0 {
 			break
