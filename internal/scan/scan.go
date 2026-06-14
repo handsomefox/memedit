@@ -100,9 +100,7 @@ func Scan(r Reader, regions []Region, needle Value, opts Options) []uintptr {
 
 	var wg sync.WaitGroup
 	for w := range opts.Workers {
-		wg.Add(1)
-		go func(id int) {
-			defer wg.Done()
+		wg.Go(func() {
 			bufp, ok := bufPool.Get().(*[]byte)
 			if !ok { // unreachable: the pool only holds *[]byte
 				b := make([]byte, bufLen)
@@ -111,7 +109,7 @@ func Scan(r Reader, regions []Region, needle Value, opts Options) []uintptr {
 			buf := *bufp
 			defer bufPool.Put(bufp)
 
-			local := results[id]
+			local := results[w]
 			for {
 				i := int(next.Add(1)) - 1
 				if i >= len(work) {
@@ -127,8 +125,8 @@ func Scan(r Reader, regions []Region, needle Value, opts Options) []uintptr {
 					opts.Progress(n)
 				}
 			}
-			results[id] = local
-		}(w)
+			results[w] = local
+		})
 	}
 	wg.Wait()
 
