@@ -21,6 +21,7 @@ linters:
       checks:
         - all
         - -QF1008 # (Can remove embedded field accessor)
+        - -ST1000
 
     revive:
       rules:
@@ -85,12 +86,12 @@ linters:
     - "gosmopolitan"
     - "iface"
     - "importas"
-    - "inamedparam"
+    # - "inamedparam"
     - "loggercheck"
     - "makezero"
     - "mirror"
     - "musttag"
-    - "nestif"
+    # - "nestif"
     - "nilerr"
     - "nilnesserr"
     - "nilnil"
@@ -99,7 +100,7 @@ linters:
     - "perfsprint"
     - "prealloc"
     - "predeclared"
-    # - "protogetter"
+    - "protogetter"
     - "reassign"
     - "recvcheck"
     - "revive"
@@ -113,7 +114,16 @@ linters:
     - "usestdlibvars"
     - "usetesting"
     - "wastedassign"
-    # - "wsl"
+    # - "wsl_v5"
+
+    # NEW
+    - copyloopvar
+    - intrange
+    - fatcontext
+    - whitespace
+    - errname
+    - nosprintfhostport
+    - modernize
 
 issues:
   # Maximum issues count per one linter.
