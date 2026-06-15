@@ -29,6 +29,7 @@ type Config struct {
 	Workers       int
 	ChunkSize     int
 	IncludeMapped bool
+	AssumeYes     bool // skip confirmation prompts (the --yes flag)
 }
 
 // REPL is the stateful scanner session.
@@ -36,12 +37,13 @@ type REPL struct {
 	target Target
 	cfg    Config
 	out    io.Writer
+	in     *bufio.Scanner // command input; also read for confirmation prompts
 
 	// cands and last are parallel slices: cands[i] is a candidate address and
-	// last[i] is the value read there at the previous scan, used by comparison
-	// scans (next>, nextchanged, ...).
+	// last[i] is the raw little-endian bits read there at the previous scan
+	// (kind is cfg.Kind), used by comparison scans (next>, nextchanged, ...).
 	cands  []uintptr
-	last   []scan.Value
+	last   []uint64
 	listed []uintptr // candidates shown by the most recent `list`, for `set <index>`
 }
 
@@ -55,16 +57,17 @@ func New(target Target, cfg Config, out io.Writer) *REPL {
 func (r *REPL) Run(in io.Reader) {
 	sc := bufio.NewScanner(in)
 	sc.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	r.in = sc
 	r.printf("memedit (%s). Type 'help' for commands.\n", r.cfg.Kind)
 	r.prompt()
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
+	for r.in.Scan() {
+		line := strings.TrimSpace(r.in.Text())
 		if line != "" && r.dispatch(line) {
 			return // quit requested
 		}
 		r.prompt()
 	}
-	if err := sc.Err(); err != nil {
+	if err := r.in.Err(); err != nil {
 		r.printf("\ninput error: %v\n", err)
 	}
 }
@@ -147,6 +150,13 @@ func (r *REPL) cmdFirst(arg string) {
 	if !ok {
 		return
 	}
+	if floods(needle) {
+		r.printf("warning: %s may match millions of addresses and use a lot of memory\n", needle)
+		if !r.confirm() {
+			r.printf("scan cancelled\n")
+			return
+		}
+	}
 	regions, err := r.target.Regions(r.cfg.IncludeMapped)
 	if err != nil {
 		r.printf("error: enumerate regions: %v\n", err)
@@ -165,7 +175,7 @@ func (r *REPL) cmdFirst(arg string) {
 		Progress:  newProgress(r.out, totalBytes),
 	}
 	r.cands = scan.Scan(r.target, regions, needle, opts)
-	r.last = fill(needle, len(r.cands)) // every match currently holds needle
+	r.last = fill(needle.Bits, len(r.cands)) // every match currently holds needle
 	r.listed = nil
 	r.printf("\nfound %d candidate(s)\n", len(r.cands))
 }
@@ -222,9 +232,10 @@ func (r *REPL) narrow(keep func(cur, prev scan.Value) bool) {
 			continue // unreadable now; drop it
 		}
 		cur := scan.Decode(r.cfg.Kind, buf[:width])
-		if keep(cur, r.last[i]) {
+		prev := scan.Value{Kind: r.cfg.Kind, Bits: r.last[i]}
+		if keep(cur, prev) {
 			outC = append(outC, addr)
-			outL = append(outL, cur)
+			outL = append(outL, cur.Bits)
 		}
 	}
 	r.cands = outC
@@ -310,11 +321,42 @@ func (r *REPL) writeAll(addrs []uintptr, val scan.Value) {
 	}
 }
 
-// fill returns a slice of n copies of v.
-func fill(v scan.Value, n int) []scan.Value {
-	s := make([]scan.Value, n)
+// fill returns a slice of n copies of bits.
+func fill(bits uint64, n int) []uint64 {
+	s := make([]uint64, n)
 	for i := range s {
-		s[i] = v
+		s[i] = bits
 	}
 	return s
+}
+
+// floods reports whether scanning for v would likely match a huge number of
+// addresses and balloon memory (very common values).
+func floods(v scan.Value) bool {
+	switch v.Kind {
+	case scan.KindInt32, scan.KindUint32, scan.KindInt64:
+		return v.Bits == 0 || v.Bits == 1
+	case scan.KindFloat32, scan.KindFloat64:
+		return v.Bits == 0 // exact 0.0 bit pattern
+	default:
+		return false
+	}
+}
+
+// confirm prints a yes/no prompt and returns true only on an explicit yes.
+// AssumeYes skips it; EOF / non-interactive input / anything-but-yes is no.
+func (r *REPL) confirm() bool {
+	if r.cfg.AssumeYes {
+		return true
+	}
+	r.printf("proceed? [y/N] ")
+	if r.in == nil || !r.in.Scan() {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(r.in.Text())) {
+	case "y", "yes":
+		return true
+	default:
+		return false
+	}
 }

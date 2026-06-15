@@ -1,6 +1,7 @@
 package repl
 
 import (
+	"bufio"
 	"strings"
 	"testing"
 
@@ -168,6 +169,58 @@ func TestFloatScan(t *testing.T) {
 	run(r, "first 3.5")
 	if len(r.cands) != 2 {
 		t.Fatalf("float first 3.5: %d candidates, want 2", len(r.cands))
+	}
+}
+
+func TestFirstFloodCancelOnNo(t *testing.T) {
+	// All-zero data: scanning for int32 0 would match many addresses.
+	data := make([]byte, 256)
+	r, out := newREPL(t, scan.KindInt32, data)
+	r.in = bufio.NewScanner(strings.NewReader("n\n"))
+	run(r, "first 0")
+	if len(r.cands) != 0 {
+		t.Fatalf("declined flood scan still ran: %d candidates", len(r.cands))
+	}
+	if !strings.Contains(out.String(), "scan cancelled") {
+		t.Fatalf("missing cancellation message: %q", out.String())
+	}
+}
+
+func TestFirstFloodProceedOnYes(t *testing.T) {
+	data := make([]byte, 256)
+	r, _ := newREPL(t, scan.KindInt32, data)
+	r.in = bufio.NewScanner(strings.NewReader("y\n"))
+	run(r, "first 0")
+	if len(r.cands) == 0 {
+		t.Fatalf("confirmed flood scan found no candidates")
+	}
+}
+
+func TestFirstFloodAssumeYesSkipsPrompt(t *testing.T) {
+	data := make([]byte, 256)
+	tgt := &memTarget{base: 0x10000, data: data}
+	out := &strings.Builder{}
+	// No r.in set: AssumeYes must short-circuit before reading any input.
+	r := New(tgt, Config{Kind: scan.KindInt32, Workers: 2, ChunkSize: 256, AssumeYes: true}, out)
+	run(r, "first 0")
+	if len(r.cands) == 0 {
+		t.Fatalf("--yes did not skip the prompt and scan")
+	}
+	if strings.Contains(out.String(), "proceed?") {
+		t.Fatalf("--yes still printed the prompt: %q", out.String())
+	}
+}
+
+func TestFirstFloodEOFIsNo(t *testing.T) {
+	data := make([]byte, 256)
+	r, out := newREPL(t, scan.KindInt32, data)
+	r.in = bufio.NewScanner(strings.NewReader("")) // EOF immediately
+	run(r, "first 1")
+	if len(r.cands) != 0 {
+		t.Fatalf("EOF prompt should cancel; got %d candidates", len(r.cands))
+	}
+	if !strings.Contains(out.String(), "scan cancelled") {
+		t.Fatalf("missing cancellation message: %q", out.String())
 	}
 }
 

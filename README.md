@@ -51,6 +51,7 @@ memedit --name <exe> | --pid <n> [flags]
 | `--chunk <n>` | 2 MiB | Per-chunk scan size in bytes |
 | `--include-mapped` | `false` | Also scan file-mapped (`MEM_MAPPED`) regions |
 | `--no-elevate` | `false` | Do not attempt to self-elevate to Administrator |
+| `--yes` | `false` | Skip the confirmation prompt before scanning for very common values like `0` or `1` |
 
 ### REPL commands
 
@@ -120,6 +121,12 @@ not change, or `next>` / `next<` when you only know the direction.
 
 ## Notes and limitations
 
+- Scanning for a very common value (`0` or `1`, or exact `0.0` for the float
+  types) can match millions of addresses and use a lot of memory, so `first`
+  warns and asks `proceed? [y/N]` first. Because that prompt reuses the command
+  input stream, pass `--yes` for scripted / non-interactive (piped) runs —
+  otherwise the next piped line is consumed as the answer and the prompt
+  defaults to no.
 - Float matching is exact (bit-for-bit). A health bar that displays `100` is
   rarely stored as exactly `100.0`. If an exact float scan finds nothing, scan
   for the value as actually stored, or use the comparison scans.

@@ -27,15 +27,16 @@ func main() {
 	chunk := flag.Int("chunk", scan.DefaultChunkBytes, "per-chunk scan size in bytes")
 	includeMapped := flag.Bool("include-mapped", false, "also scan file-mapped (MEM_MAPPED) regions")
 	noElevate := flag.Bool("no-elevate", false, "do not attempt to self-elevate to Administrator")
+	yes := flag.Bool("yes", false, "skip confirmation prompts before scanning for very common values")
 	flag.Parse()
 
-	if err := run(*name, *pid, *typ, *align, *workers, *chunk, *includeMapped, *noElevate); err != nil {
+	if err := run(*name, *pid, *typ, *align, *workers, *chunk, *includeMapped, *noElevate, *yes); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
 
-func run(name string, pid int, typ string, align, workers, chunk int, includeMapped, noElevate bool) error {
+func run(name string, pid int, typ string, align, workers, chunk int, includeMapped, noElevate, assumeYes bool) error {
 	fmt.Println("WARNING: single-player / offline use only. Do NOT use against multiplayer games " +
 		"with anti-cheat (VAC / EAC / BattlEye); that is exactly the access they ban for.")
 
@@ -66,6 +67,7 @@ func run(name string, pid int, typ string, align, workers, chunk int, includeMap
 		Workers:       workers,
 		ChunkSize:     chunk,
 		IncludeMapped: includeMapped,
+		AssumeYes:     assumeYes,
 	}
 	repl.New(proc, cfg, os.Stdout).Run(os.Stdin)
 	return nil
